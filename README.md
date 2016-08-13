@@ -43,3 +43,9 @@ return JSON:
     "commands_used": Array of Number,
     "solved_in": Number (seconds)
 }
+
+## Commands
+0 = forward a grid
+1 = backward a grid
+2 = left 90 degrees
+3 = right 90 degrees
