@@ -3,7 +3,7 @@ var cors = require('cors');
 var app = express();
 
 var bodyParser = require('body-parser');
-app.use( bodyParser.json() );       // to support JSON-encoded bodies
+app.use(bodyParser.json() );       // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
   extended: true
 }));
@@ -26,11 +26,17 @@ app.get('/schedule', function(req, res){
 
   const UTC_PER_MINUTE = 60000;
 
-  var minutes_until_next_round = 4;
+  var minutes_until_next_event = 4;
+  var next_event_descriptor = "Submissions Close";
+
+  var time_of_next_event = new Date(time_now.getTime() + (180 + minutes_until_next_event) * UTC_PER_MINUTE);
+
+  console.log(time_now);
+  console.log(time_of_next_event);
 
   res.json({
-    "round_starts": new Date(time_now + minutes_until_next_round * UTC_PER_MINUTE),
-    "next_game": new Date(time_now + (180 + minutes_until_next_round) * UTC_PER_MINUTE)
+    "nextEvent": next_event_descriptor,
+    "timeOfNextEvent": time_of_next_event
   });
 });
 

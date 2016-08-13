@@ -4,12 +4,15 @@
 
 Current server IP: **172.19.59.128**
 
+###Video Streaming
+????
+
 ###GET /schedule
 ```
 return JSON:
 {
-    "next_game": DateTimeObj,
-    "submissions_close": DateTimeObj
+    "nextEvent": String, // descriptor of next event
+    "timeOfNextEvent": DateTime
 }
 ```
 
