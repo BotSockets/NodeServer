@@ -1,76 +1,114 @@
+var express = require('express');
+var cors = require('cors');
+var app = express();
 
-if( process.argv.length < 3 ) {
-  console.log(
-    'Usage: \n' +
-    'node stream-server.js <secret> [<stream-port> <websocket-port>]'
-  );
-  process.exit();
+var bodyParser = require('body-parser');
+app.use(bodyParser.json() );       // to support JSON-encoded bodies
+app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
+  extended: true
+}));
+app.use(cors());
+
+var users = [];
+
+function create_new_user(){
+  users.push({
+    user_name: "Anonymous",
+    commands: []
+  });
+
+  // return the user id
+  return users.length - 1;
 }
 
-var STREAM_SECRET = process.argv[2],
-  STREAM_PORT = process.argv[3] || 8082,
-  WEBSOCKET_PORT = process.argv[4] || 8084,
-  STREAM_MAGIC_BYTES = 'jsmp'; // Must be 4 bytes
+app.get('/schedule', function(req, res){
+  var time_now = new Date();
 
-var width = 320,
-  height = 240;
+  const UTC_PER_MINUTE = 60000;
 
-// Websocket Server
-var socketServer = new (require('ws').Server)({port: WEBSOCKET_PORT});
-socketServer.on('connection', function(socket) {
-  // Send magic bytes and video size to the newly connected socket
-  // struct { char magic[4]; unsigned short width, height;}
-  var streamHeader = new Buffer(8);
-  streamHeader.write(STREAM_MAGIC_BYTES);
-  streamHeader.writeUInt16BE(width, 4);
-  streamHeader.writeUInt16BE(height, 6);
-  socket.send(streamHeader, {binary:true});
+  var minutes_until_next_event = 4;
+  var next_event_descriptor = "Submissions Close";
 
-  console.log( 'New WebSocket Connection ('+socketServer.clients.length+' total)' );
+  var time_of_next_event = new Date(time_now.getTime() + (180 + minutes_until_next_event) * UTC_PER_MINUTE);
 
-  socket.on('close', function(code, message){
-    console.log( 'Disconnected WebSocket ('+socketServer.clients.length+' total)' );
+  console.log(time_now);
+  console.log(time_of_next_event);
+
+  res.json({
+    "nextEvent": next_event_descriptor,
+    "timeOfNextEvent": time_of_next_event
   });
 });
 
-socketServer.broadcast = function(data, opts) {
-  for( var i in this.clients ) {
-    if (this.clients[i].readyState == 1) {
-      this.clients[i].send(data, opts);
-    }
-    else {
-      console.log( 'Error: Client ('+i+') not connected.' );
+app.get('/join', function(req, res){
+  var new_user_id = create_new_user();
+
+  res.json({
+    "user_id": new_user_id
+  });
+});
+
+app.get('/winner', function(req, res){
+  var winner  = users[users.length - 1];
+
+  res.json({
+    "message": "This is just a test",
+
+    "user_id": users.length - 1,
+    "user_name": winner.user_name,
+    "moves_taken": winner.commands.length,
+    "commands_used": winner.commands,
+    "solved_in": 420 // hardcoded for now
+  });
+});
+
+function areCommandsValid(commands){
+  var validCommands = [0, 1, 2, 3, 4];
+
+  for(var i in commands){
+    if(validCommands.indexOf(commands[i]) == -1){
+      return false;
     }
   }
-};
 
+  return true;
+}
 
-// HTTP Server to accept incomming MPEG Stream
-var streamServer = require('http').createServer( function(request, response) {
-  var params = request.url.substr(1).split('/');
+app.post('/commands', function(req, res){
+  var resp = "";
+  var statusCode = 400; // assume all is unwell unless otherwise specified
 
-  if( params[0] == STREAM_SECRET ) {
-    response.connection.setTimeout(0);
+  if(req.body.user_id in users){
 
-    width = (params[1] || 320)|0;
-    height = (params[2] || 240)|0;
+    if(areCommandsValid(req.body.commands)){
+      users[req.body.user_id].commands = req.body.commands;
+      resp = "Confirmed";
+      statusCode = 200;
+    } else {
+      resp = "Denied. Command array is invalid."
+    }
+  } else {
+    resp = "Denied. No user with that ID found";
+  }
 
-    console.log(
-      'Stream Connected: ' + request.socket.remoteAddress +
-      ':' + request.socket.remotePort + ' size: ' + width + 'x' + height
-    );
-    request.on('data', function(data){
-      socketServer.broadcast(data, {binary:true});
+  res.statusCode(statusCode).json({
+    "message": resp
+  });
+});
+
+app.post('/set_username', function(req, res){
+  if(req.body.user_id in users){
+    users[req.body.user_id].user_name = req.body.user_name;
+
+    res.json({
+      "username_result": "user_id " + req.body.user_id
+        + " has set their username to " + req.body.user_name
+    });
+  } else {
+    res.json({
+      "ERROR": "a user with that username does not exist"
     });
   }
-  else {
-    console.log(
-      'Failed Stream Connection: '+ request.socket.remoteAddress +
-      request.socket.remotePort + ' - wrong secret.'
-    );
-    response.end();
-  }
-}).listen(STREAM_PORT);
+});
 
-console.log('Listening for MPEG Stream on http://127.0.0.1:'+STREAM_PORT+'/<secret>/<width>/<height>');
-console.log('Awaiting WebSocket connections on ws://127.0.0.1:'+WEBSOCKET_PORT+'/');
+app.listen(80, "0.0.0.0");
